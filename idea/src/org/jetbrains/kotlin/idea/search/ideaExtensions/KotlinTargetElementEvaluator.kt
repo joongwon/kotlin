@@ -18,24 +18,59 @@ package org.jetbrains.kotlin.idea.search.ideaExtensions
 
 import com.intellij.codeInsight.TargetElementEvaluatorEx
 import com.intellij.codeInsight.TargetElementUtil
-import com.intellij.codeInsight.TargetElementUtilExtender
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiReference
+import com.intellij.util.BitUtil
+import org.jetbrains.kotlin.descriptors.SimpleFunctionDescriptor
+import org.jetbrains.kotlin.idea.caches.resolve.analyze
+import org.jetbrains.kotlin.idea.intentions.isAutoCreatedItUsage
 import org.jetbrains.kotlin.idea.references.KtDestructuringDeclarationReference
-import org.jetbrains.kotlin.psi.KtClass
-import org.jetbrains.kotlin.psi.KtPrimaryConstructor
+import org.jetbrains.kotlin.idea.references.mainReference
+import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.getNonStrictParentOfType
 import org.jetbrains.kotlin.psi.psiUtil.isAbstract
+import org.jetbrains.kotlin.resolve.DescriptorToSourceUtils
+import org.jetbrains.kotlin.resolve.descriptorUtil.isExtension
+import org.jetbrains.kotlin.resolve.lazy.BodyResolveMode
+import org.jetbrains.kotlin.resolve.source.PsiSourceElement
+import java.util.*
 
 class KotlinTargetElementEvaluator : TargetElementEvaluatorEx {
     override fun includeSelfInGotoImplementation(element: PsiElement): Boolean = !(element is KtClass && element.isAbstract())
 
     override fun getElementByReference(ref: PsiReference, flags: Int): PsiElement? {
         // prefer destructing declaration entry to its target if element name is accepted
-        if (ref is KtDestructuringDeclarationReference && flags.and(TargetElementUtil.ELEMENT_NAME_ACCEPTED) != 0) {
+        if (ref is KtDestructuringDeclarationReference && BitUtil.isSet(flags, TargetElementUtil.ELEMENT_NAME_ACCEPTED)) {
             return ref.element
         }
+
+        if (BitUtil.isSet(flags, TargetElementUtil.REFERENCED_ELEMENT_ACCEPTED)) {
+            val element: PsiElement = ref.element
+            if (element.text == "it") {
+                if (element is KtNameReferenceExpression && isAutoCreatedItUsage(element)) {
+                    return element
+                }
+            }
+
+            if (element.text == "this") {
+                if (element is KtNameReferenceExpression) {
+                    val target = element.mainReference.resolveToDescriptors(element.analyze(bodyResolveMode = BodyResolveMode.PARTIAL)).singleOrNull()
+                    val simpleFunctionDescriptor = target as? SimpleFunctionDescriptor
+
+                    if (simpleFunctionDescriptor != null && simpleFunctionDescriptor.isExtension) {
+                        val funSource = simpleFunctionDescriptor.source
+                        if (funSource is PsiSourceElement) {
+                            val psi = funSource.psi
+                            if (psi is KtNamedFunction) {
+                                return psi.receiverTypeReference
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         return null
     }
 

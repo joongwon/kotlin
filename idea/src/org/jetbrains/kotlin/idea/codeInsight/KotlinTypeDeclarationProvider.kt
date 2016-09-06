@@ -19,19 +19,58 @@ package org.jetbrains.kotlin.idea.codeInsight
 import com.intellij.codeInsight.navigation.actions.TypeDeclarationProvider
 import com.intellij.psi.PsiElement
 import org.jetbrains.kotlin.descriptors.CallableDescriptor
+import org.jetbrains.kotlin.descriptors.ValueParameterDescriptor
 import org.jetbrains.kotlin.idea.caches.resolve.analyze
+import org.jetbrains.kotlin.idea.caches.resolve.resolveToDescriptor
+import org.jetbrains.kotlin.idea.references.mainReference
+import org.jetbrains.kotlin.psi.KtDeclaration
 import org.jetbrains.kotlin.psi.KtElement
 import org.jetbrains.kotlin.psi.KtFile
+import org.jetbrains.kotlin.psi.KtTypeReference
 import org.jetbrains.kotlin.resolve.BindingContext
 import org.jetbrains.kotlin.resolve.DescriptorToSourceUtils
+import org.jetbrains.kotlin.resolve.descriptorUtil.isExtension
+import org.jetbrains.kotlin.resolve.lazy.BodyResolveMode
+import org.jetbrains.kotlin.resolve.source.PsiSourceElement
 
 class KotlinTypeDeclarationProvider : TypeDeclarationProvider {
     override fun getSymbolTypeDeclarations(symbol: PsiElement): Array<PsiElement>? {
         if (symbol !is KtElement || symbol.getContainingFile() !is KtFile) return emptyArray()
 
-        val bindingContext = symbol.analyze()
-        val callableDescriptor = bindingContext.get(BindingContext.DECLARATION_TO_DESCRIPTOR, symbol)
-        if (callableDescriptor !is CallableDescriptor) return emptyArray()
+        if (symbol.text == "it") {
+            val mainReference = symbol.mainReference
+
+            if (mainReference != null) {
+                val targetDescriptor = mainReference.resolveToDescriptors(symbol.analyze(bodyResolveMode = BodyResolveMode.PARTIAL)).singleOrNull()
+                val valueParameterDescriptor = targetDescriptor as? ValueParameterDescriptor
+                if (valueParameterDescriptor != null) {
+                    val source = valueParameterDescriptor.type.constructor.declarationDescriptor?.source
+
+                    if (source is PsiSourceElement) {
+                        val typeSource = source.psi
+                        if (typeSource != null) {
+                            return arrayOf(typeSource)
+                        }
+                    }
+                }
+            }
+        }
+
+        val parent = symbol.parent
+        if (symbol is KtTypeReference && parent is KtDeclaration) {
+            val declarationDescriptor = parent.resolveToDescriptor(BodyResolveMode.PARTIAL)
+            if (declarationDescriptor.isExtension) {
+                val extensionReceiverParameter = (declarationDescriptor as CallableDescriptor).extensionReceiverParameter
+
+                val classifierDescriptor = extensionReceiverParameter!!.type.constructor.declarationDescriptor ?: return emptyArray()
+                val typeElement = DescriptorToSourceUtils.descriptorToDeclaration(classifierDescriptor) ?: return emptyArray()
+
+                return arrayOf(typeElement)
+            }
+        }
+
+        val bindingContext = symbol.analyze(BodyResolveMode.PARTIAL)
+        val callableDescriptor = bindingContext.get(BindingContext.DECLARATION_TO_DESCRIPTOR, symbol) as? CallableDescriptor ?: return emptyArray()
 
         val type = callableDescriptor.returnType ?: return emptyArray()
 
