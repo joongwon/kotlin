@@ -143,8 +143,10 @@ fun createStubForTypeName(
         parent: StubElement<out PsiElement>,
         onUserTypeLevel: (KotlinUserTypeStub, Int) -> Unit = { x, y -> }
 ): KotlinUserTypeStub {
+    val substituteWithAny = typeClassId.isLocal
+
     val fqName =
-            if (typeClassId.isLocal) KotlinBuiltIns.FQ_NAMES.any
+            if (substituteWithAny) KotlinBuiltIns.FQ_NAMES.any
             else typeClassId.asSingleFqName().toUnsafe()
     val segments = fqName.pathSegments().asReversed()
     assert(segments.isNotEmpty())
@@ -156,7 +158,9 @@ fun createStubForTypeName(
             recCreateStubForType(userTypeStub, level + 1)
         }
         KotlinNameReferenceExpressionStubImpl(userTypeStub, lastSegment.ref())
-        onUserTypeLevel(userTypeStub, level)
+        if (!substituteWithAny) {
+            onUserTypeLevel(userTypeStub, level)
+        }
         return userTypeStub
     }
 
