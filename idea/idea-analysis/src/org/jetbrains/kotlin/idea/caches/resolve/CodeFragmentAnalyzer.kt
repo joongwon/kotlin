@@ -91,14 +91,14 @@ class CodeFragmentAnalyzer(
         val scopeForContextElement: LexicalScope?
         val dataFlowInfo: DataFlowInfo
 
-        when (context) {
-            is KtPrimaryConstructor -> {
+        when {
+            context is KtPrimaryConstructor -> {
                 val descriptor = resolveSession.getClassDescriptor(context.getContainingClassOrObject(), NoLookupLocation.FROM_IDE) as ClassDescriptorWithResolutionScopes
 
                 scopeForContextElement = descriptor.scopeForInitializerResolution
                 dataFlowInfo = DataFlowInfo.EMPTY
             }
-            is KtSecondaryConstructor -> {
+            context is KtSecondaryConstructor -> {
                 val correctedContext = context.getDelegationCall().calleeExpression!!
 
                 val contextForElement = resolveToElement(correctedContext)
@@ -106,17 +106,17 @@ class CodeFragmentAnalyzer(
                 scopeForContextElement = contextForElement[BindingContext.LEXICAL_SCOPE, correctedContext]
                 dataFlowInfo = DataFlowInfo.EMPTY
             }
-            is KtClassOrObject -> {
+            context is KtClassOrObject && !context.isLocal -> {
                 val descriptor = resolveSession.getClassDescriptor(context, NoLookupLocation.FROM_IDE) as ClassDescriptorWithResolutionScopes
 
                 scopeForContextElement = descriptor.scopeForMemberDeclarationResolution
                 dataFlowInfo = DataFlowInfo.EMPTY
             }
-            is KtFile -> {
+            context is KtFile -> {
                 scopeForContextElement = resolveSession.fileScopeProvider.getFileResolutionScope(context)
                 dataFlowInfo = DataFlowInfo.EMPTY
             }
-            is KtElement -> {
+            context is KtElement -> {
                 val correctedContext = context.correctContextForElement()
 
                 val contextForElement = resolveToElement(correctedContext)
