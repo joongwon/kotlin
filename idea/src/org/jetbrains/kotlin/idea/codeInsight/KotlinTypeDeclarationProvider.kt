@@ -18,24 +18,39 @@ package org.jetbrains.kotlin.idea.codeInsight
 
 import com.intellij.codeInsight.navigation.actions.TypeDeclarationProvider
 import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiWhiteSpace
 import org.jetbrains.kotlin.descriptors.CallableDescriptor
 import org.jetbrains.kotlin.descriptors.ValueParameterDescriptor
+import org.jetbrains.kotlin.descriptors.impl.AnonymousFunctionDescriptor
 import org.jetbrains.kotlin.idea.caches.resolve.analyze
 import org.jetbrains.kotlin.idea.caches.resolve.resolveToDescriptor
 import org.jetbrains.kotlin.idea.references.mainReference
-import org.jetbrains.kotlin.psi.KtDeclaration
-import org.jetbrains.kotlin.psi.KtElement
-import org.jetbrains.kotlin.psi.KtFile
-import org.jetbrains.kotlin.psi.KtTypeReference
+import org.jetbrains.kotlin.psi.*
+import org.jetbrains.kotlin.psi.psiUtil.parents
 import org.jetbrains.kotlin.resolve.BindingContext
 import org.jetbrains.kotlin.resolve.DescriptorToSourceUtils
 import org.jetbrains.kotlin.resolve.descriptorUtil.isExtension
 import org.jetbrains.kotlin.resolve.lazy.BodyResolveMode
 import org.jetbrains.kotlin.resolve.source.PsiSourceElement
+import org.jetbrains.kotlin.utils.addToStdlib.firstIsInstanceOrNull
 
 class KotlinTypeDeclarationProvider : TypeDeclarationProvider {
     override fun getSymbolTypeDeclarations(symbol: PsiElement): Array<PsiElement>? {
-        if (symbol !is KtElement || symbol.getContainingFile() !is KtFile) return emptyArray()
+        var symbol = symbol
+
+        if (symbol.containingFile !is KtFile) return emptyArray()
+
+        var firstParameterType = false
+
+        if (symbol is PsiWhiteSpace) {
+            val findElementAt = symbol.containingFile.findElementAt(symbol.textOffset - 1)
+            if (findElementAt?.text == "{") {
+                symbol = findElementAt.parents.firstIsInstanceOrNull<KtFunctionLiteral>() ?: return emptyArray()
+                firstParameterType = true
+            }
+        }
+
+        if (symbol !is KtElement) return emptyArray()
 
         if (symbol.text == "it") {
             val mainReference = symbol.mainReference
@@ -72,7 +87,13 @@ class KotlinTypeDeclarationProvider : TypeDeclarationProvider {
         val bindingContext = symbol.analyze(BodyResolveMode.PARTIAL)
         val callableDescriptor = bindingContext.get(BindingContext.DECLARATION_TO_DESCRIPTOR, symbol) as? CallableDescriptor ?: return emptyArray()
 
-        val type = callableDescriptor.returnType ?: return emptyArray()
+        val type = when {
+                       callableDescriptor is AnonymousFunctionDescriptor && firstParameterType ->
+                           callableDescriptor.valueParameters.firstOrNull()?.type
+                       callableDescriptor is AnonymousFunctionDescriptor && symbol is KtFunctionLiteral ->
+                           callableDescriptor.extensionReceiverParameter?.type
+                       else -> callableDescriptor.returnType
+                   } ?: return emptyArray()
 
         val classifierDescriptor = type.constructor.declarationDescriptor ?: return emptyArray()
         val typeElement = DescriptorToSourceUtils.descriptorToDeclaration(classifierDescriptor) ?: return emptyArray()

@@ -49,7 +49,21 @@ class KotlinTargetElementEvaluator : TargetElementEvaluatorEx {
             val element: PsiElement = ref.element
             if (element.text == "it") {
                 if (element is KtNameReferenceExpression && isAutoCreatedItUsage(element)) {
-                    return element
+                    val itDescriptor = element.mainReference.resolveToDescriptors(
+                            element.analyze(bodyResolveMode = BodyResolveMode.PARTIAL)).singleOrNull()
+                    if (itDescriptor != null) {
+                        val simpleFunctionDescriptor = itDescriptor.containingDeclaration as? SimpleFunctionDescriptor
+                        if (simpleFunctionDescriptor != null) {
+                            val funSource = simpleFunctionDescriptor.source
+                            if (funSource is PsiSourceElement) {
+                                val psi = funSource.psi?.parent as? KtLambdaExpression
+                                if (psi != null) {
+                                    return psi.leftCurlyBrace.treeNext.psi // Place caret after the open curly brace
+                                }
+                            }
+                        }
+                    }
+
                 }
             }
 

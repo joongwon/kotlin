@@ -48,6 +48,12 @@ public class GotoTypeDeclarationTestGenerated extends AbstractGotoTypeDeclaratio
         doTest(fileName);
     }
 
+    @TestMetadata("itExtensionLambda.test")
+    public void testItExtensionLambda() throws Exception {
+        String fileName = KotlinTestUtils.navigationMetadata("idea/testData/navigation/gotoTypeDeclaration/itExtensionLambda.test");
+        doTest(fileName);
+    }
+
     @TestMetadata("itParameterInLambda.test")
     public void testItParameterInLambda() throws Exception {
         String fileName = KotlinTestUtils.navigationMetadata("idea/testData/navigation/gotoTypeDeclaration/itParameterInLambda.test");
