@@ -33,16 +33,13 @@ private fun Appendable.renderAttributeDeclaration(arg: GenerateAttribute, modali
     append(": ")
     append(arg.type.render())
     if (arg.initializer != null) {
-        if (omitDefaults) {
-            append(" /*")
+        if (!omitDefaults) {
+            append(" = noImpl")
         }
 
-        append(" = ")
+        append(" /* ")
         append(arg.initializer.replaceWrongConstants(arg.type))
-
-        if (omitDefaults) {
-            append(" */")
-        }
+        append(" */")
     }
 }
 
@@ -108,7 +105,7 @@ private fun Appendable.renderFunctionDeclaration(f: GenerateFunction, override: 
     }
     append("fun ${f.name.replaceKeywords()}")
     renderArgumentsDeclaration(f.arguments, override)
-    appendln(": ${f.returnType.render()} = noImpl")
+    appendln(": ${f.returnType.render()}")
 }
 
 private fun List<GenerateAttribute>.hasNoVars() = none { it.isVar }
@@ -180,10 +177,7 @@ fun Appendable.render(allTypes: Map<String, GenerateTraitOrClass>, typeNamesToUn
             val modality = when {
                 attribute.signature in superSignatures -> MemberModality.OVERRIDE
                 iface.kind == GenerateDefinitionKind.CLASS && attribute.isVal -> MemberModality.OPEN
-                iface.kind == GenerateDefinitionKind.ABSTRACT_CLASS -> when {
-                    attribute.initializer != null || attribute.getterSetterNoImpl -> MemberModality.OPEN
-                    else -> MemberModality.ABSTRACT
-                }
+                iface.kind == GenerateDefinitionKind.ABSTRACT_CLASS -> MemberModality.OPEN
                 else -> MemberModality.FINAL
             }
 
@@ -203,8 +197,8 @@ fun Appendable.render(allTypes: Map<String, GenerateTraitOrClass>, typeNamesToUn
                 )
             }
     }
-    iface.memberFunctions.filter { it !in superFunctions && !it.static }.map { it.dynamicIfUnknownType(allTypes.keys) }.groupBy { it.signature }.reduceValues(::betterFunction).values.forEach {
-        renderFunctionDeclaration(it.fixRequiredArguments(iface.name), it.signature in superSignatures, commented = it.isCommented(iface.name))
+    iface.memberFunctions.filter { (it !in superFunctions || it.override) && !it.static }.map { it.dynamicIfUnknownType(allTypes.keys) }.groupBy { it.signature }.reduceValues(::betterFunction).values.forEach {
+        renderFunctionDeclaration(it.fixRequiredArguments(iface.name), it.signature in superSignatures || it.override, commented = it.isCommented(iface.name))
     }
 
     val staticAttributes = iface.memberAttributes.filter { it.static }
