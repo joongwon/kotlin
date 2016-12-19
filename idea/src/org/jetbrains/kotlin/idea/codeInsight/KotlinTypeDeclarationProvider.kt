@@ -96,8 +96,6 @@ class KotlinTypeDeclarationProvider : TypeDeclarationProvider {
                    } ?: return emptyArray()
 
         val classifierDescriptor = type.constructor.declarationDescriptor ?: return emptyArray()
-        val typeElement = DescriptorToSourceUtils.descriptorToDeclaration(classifierDescriptor) ?: return emptyArray()
-
-        return arrayOf(typeElement)
+        return DescriptorToSourceUtilsIde.getAllDeclarations(symbol.project, classifierDescriptor).toTypedArray()
     }
 }
